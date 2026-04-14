@@ -1,0 +1,51 @@
+model:
+  name: "DBNet++"
+  backbone:
+    type: "ResNet50"
+    pretrained: true
+    pretrained_path: "train/weights/resnet50_imagenet.pdparams"
+    freeze_stages: 4
+    learning_rate_scale: 0.1
+  neck:
+    type: "FPNASF"
+    in_channels: [256, 512, 1024, 2048]
+    out_channels: 256
+  head:
+    type: "DBHead"
+    k: 50
+    use_bias: false
+
+input:
+  max_side: 960
+  divisor: 32
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+inference:
+  prob_threshold: 0.3
+  box_threshold: 0.5
+  min_box_size: 3
+  unclip_ratio: 1.5
+  max_candidates: 1000
+
+runtime:
+  device: "gpu"
+  gpu_ids: [0]
+  precision: "fp16"
+  distributed: false
+
+dataloader:
+  batch_size: 12
+  shuffle: true
+  num_workers: 6
+  prefetch_factor: 2
+  persistent_workers: true
+  pin_memory: true
+
+training:
+  epochs: 120
+  log_interval: 20
+  eval_interval: 1
+  save_top_k: 3
+  gradient_accumulation_steps: 1
+  max_grad_norm: 5.0

@@ -1,0 +1,2 @@
+"""OCR development project scaffold."""
+

@@ -1,0 +1,30 @@
+model:
+  name: "DBNet++"
+  backbone:
+    type: "ResNet50"
+    pretrained: true
+    pretrained_path: "backend/ocr/models/det/weights/resnet50_imagenet.pdparams"
+    freeze_stages: 4
+    learning_rate_scale: 0.1
+  neck:
+    type: "FPNASF"
+    in_channels: [256, 512, 1024, 2048]
+    out_channels: 256
+  head:
+    type: "DBHead"
+    k: 50
+    use_bias: false
+
+inference:
+  prob_threshold: 0.3
+  box_threshold: 0.5
+  min_box_size: 3
+  unclip_ratio: 1.5
+  max_candidates: 1000
+
+input:
+  max_side: 960
+  divisor: 32
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+

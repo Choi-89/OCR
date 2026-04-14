@@ -1,0 +1,43 @@
+model:
+  name: "SVTR_Tiny"
+  backbone:
+    type: "SVTRNet"
+    img_size: [32, 320]
+    in_channels: 3
+    embed_dim: [64, 128, 256]
+    depth: [3, 6, 3]
+    num_heads: [2, 4, 8]
+    mixer: ["Local", "Local", "Local",
+            "Global", "Global", "Global",
+            "Global", "Global", "Global",
+            "Local", "Local", "Local"]
+    local_mixer: [[7, 11], [7, 11], [7, 11]]
+    pretrained: true
+    pretrained_path: "backend/ocr/models/rec/weights/svtr_tiny_pretrained.pdparams"
+    patch_embedding_freeze_epochs: 5
+    patch_embedding_lr_scale: 0.1
+  head:
+    type: "CTCHead"
+    vocab_size: 11315
+    mid_channels: 96
+
+decoder:
+  type: "CTCDecoder"
+  method: "greedy"
+  beam_width: 5
+  blank_index: 11314
+
+input:
+  height: 32
+  max_width: 320
+  min_width: 32
+  padding_value: 0
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+single_char:
+  enabled: true
+  max_output_chars: 1
+
+dict_path: "backend/ocr/dict/dict_latest.txt"
+

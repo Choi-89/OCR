@@ -1,0 +1,47 @@
+project_name: payroll-ocr
+framework: PaddlePaddle
+device: cuda
+precision: fp16
+gpu_ids: [0]
+gpu_profile:
+  name: NVIDIA GeForce RTX 2080 Ti
+  count: 7
+  vram_gb: 11
+  driver_version: "580.126.09"
+  cuda_version: "13.0"
+
+dataset:
+  root: data/dataset
+  train: data/dataset/train
+  val: data/dataset/val
+  test: data/dataset/test
+  angle: data/angle
+
+model:
+  detection: dbnet++
+  recognition: svtr_tiny
+  angle_classifier: mobilenet_v3_small
+
+training:
+  recommendation_order: [cls, det, rec]
+  batch_size:
+    cls: 128
+    det: 12
+    rec: 64
+  epochs:
+    cls: 25
+    det: 120
+    rec: 80
+  learning_rate: 0.001
+  warmup_steps: 500
+  weight_decay: 0.0001
+  num_workers:
+    cls: 8
+    det: 6
+    rec: 8
+  prefetch_factor: 2
+  persistent_workers: true
+  pin_memory: true
+
+evaluation:
+  cer_threshold: 0.03

@@ -1,0 +1,102 @@
+augmentation:
+  enabled: true
+  seed: 42
+
+  det:
+    geometric:
+      rotate:
+        enabled: true
+        prob: 0.5
+        range: [-10, 10]
+      random_crop:
+        enabled: true
+        prob: 0.6
+        min_area_ratio: 0.75
+        bbox_overlap_thresh: 0.5
+      horizontal_flip:
+        enabled: true
+        prob: 0.3
+      perspective:
+        enabled: true
+        prob: 0.3
+        distort_limit: 0.05
+      resize_jitter:
+        enabled: true
+        prob: 0.5
+        range: [0.5, 2.0]
+
+    photometric:
+      brightness:
+        enabled: true
+        prob: 0.7
+        range: [0.6, 1.4]
+      contrast:
+        enabled: true
+        prob: 0.6
+        range: [0.7, 1.5]
+      hsv_shift:
+        enabled: true
+        prob: 0.4
+      gaussian_noise:
+        enabled: true
+        prob: 0.4
+        sigma_range: [1, 8]
+      motion_blur:
+        enabled: true
+        prob: 0.2
+        kernel_range: [3, 5]
+      jpeg_quality:
+        enabled: true
+        prob: 0.5
+        quality_range: [50, 95]
+      shadow:
+        enabled: true
+        prob: 0.25
+
+  rec:
+    geometric:
+      rotate:
+        enabled: true
+        prob: 0.3
+        range: [-3, 3]
+      stretch_x:
+        enabled: true
+        prob: 0.3
+        range: [0.9, 1.1]
+      stretch_y:
+        enabled: true
+        prob: 0.2
+        range: [0.9, 1.05]
+
+    photometric:
+      brightness:
+        enabled: true
+        prob: 0.7
+        range: [0.5, 1.5]
+      contrast:
+        enabled: true
+        prob: 0.6
+        range: [0.6, 1.6]
+      gaussian_noise:
+        enabled: true
+        prob: 0.5
+        sigma_range: [1, 5]
+      gaussian_blur:
+        enabled: true
+        prob: 0.3
+        sigma_range: [0.3, 1.2]
+      jpeg_quality:
+        enabled: true
+        prob: 0.6
+        quality_range: [40, 90]
+      dilate:
+        enabled: true
+        prob: 0.25
+        kernel_range: [1, 2]
+      erode:
+        enabled: true
+        prob: 0.25
+        kernel_range: [1, 2]
+      grayscale:
+        enabled: true
+        prob: 0.2

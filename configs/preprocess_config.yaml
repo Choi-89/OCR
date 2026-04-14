@@ -1,0 +1,43 @@
+preprocess:
+  load:
+    enabled: true
+    white_background: true
+
+  angle_correction:
+    enabled: true
+    method: "classifier"
+    fallback: "exif"
+
+  denoise:
+    enabled: true
+    laplacian_threshold: 100
+    h: 10
+    hColor: 10
+    templateWindowSize: 7
+    searchWindowSize: 21
+
+  binarize:
+    enabled: false
+    method: "adaptive"
+
+  sharpen:
+    enabled: true
+    laplacian_threshold: 500
+
+  deskew:
+    enabled: true
+    method: "hough"
+    min_angle: 0.5
+    max_angle: 30.0
+    interpolation: "cubic"
+    projection_step: 0.5
+
+  resize:
+    det_max_side: 960
+    rec_height: 32
+    rec_max_width: 320
+    padding_color: 255
+
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
