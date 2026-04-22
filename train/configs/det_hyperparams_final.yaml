@@ -1,0 +1,25 @@
+status: "provisional"
+confirmed_date: null
+experiments_run: 0
+
+hyperparams:
+  base_lr: 0.001
+  min_lr: 0.000001
+  batch_size: 12
+  epochs: 120
+  unclip_ratio: 1.5
+  prob_threshold: 0.3
+  box_threshold: 0.5
+  min_box_size: 3
+
+early_stopping:
+  enabled: true
+  patience: 20
+  monitor: "val_f1"
+  min_delta: 0.002
+  restore_best: true
+
+best_val_metrics:
+  precision: null
+  recall: null
+  f1: null

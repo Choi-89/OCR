@@ -1,0 +1,27 @@
+status: "provisional"
+confirmed_date: null
+experiments_run: 0
+
+hyperparams:
+  base_lr: 0.001
+  min_lr: 0.000001
+  batch_size: 64
+  epochs: 80
+  label_smoothing: 0.0
+  decoder: "greedy"
+  beam_width: 5
+
+early_stopping:
+  enabled: true
+  patience: 15
+  monitor: "val_cer"
+  min_delta: 0.001
+  restore_best: true
+
+best_val_metrics:
+  cer: null
+  wer: null
+  accuracy: null
+  cer_single_char: null
+  cer_date: null
+  cer_handwrite: null

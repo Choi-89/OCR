@@ -1,0 +1,19 @@
+status: "provisional"
+confirmed_date: null
+experiments_run: 0
+
+hyperparams:
+  base_lr: 0.001
+  batch_size: 128
+  epochs: 50
+  inference_threshold: 0.7
+
+early_stopping:
+  enabled: true
+  patience: 10
+  monitor: "val_accuracy"
+  min_delta: 0.001
+  restore_best: true
+
+best_val_accuracy: null
+false_positive_rate: null

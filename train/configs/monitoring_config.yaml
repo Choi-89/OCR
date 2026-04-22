@@ -1,0 +1,79 @@
+project: "shiftflow-ocr"
+mode: "online"          # online / offline / disabled
+log_interval: 50
+visualization_interval_epochs: 10
+checkpoint_keep_last: 3
+alert_email: null
+slack_webhook_env: "SLACK_WEBHOOK_URL"
+
+det:
+  tags: ["det", "v1"]
+  best_metric: "val/f1"
+  best_mode: "max"
+  step_metrics:
+    - "train/loss_total"
+    - "train/loss_prob"
+    - "train/loss_thresh"
+    - "train/loss_binary"
+    - "train/learning_rate"
+    - "train/grad_norm"
+  epoch_metrics:
+    - "val/precision"
+    - "val/recall"
+    - "val/f1"
+    - "val/loss_total"
+    - "epoch_time"
+    - "best_val_f1"
+  visualizations:
+    - "val_bbox_overlay"
+    - "probability_heatmap"
+    - "threshold_heatmap"
+
+rec:
+  tags: ["rec", "v1"]
+  best_metric: "val/cer"
+  best_mode: "min"
+  step_metrics:
+    - "train/loss_ctc"
+    - "train/learning_rate"
+    - "train/grad_norm"
+  epoch_metrics:
+    - "val/cer"
+    - "val/wer"
+    - "val/accuracy"
+    - "val/cer_single_char"
+    - "val/cer_date"
+    - "val/cer_handwrite"
+    - "val/loss_ctc"
+    - "best_val_cer"
+  visualizations:
+    - "crop_prediction_table"
+    - "top_cer_errors"
+
+cls:
+  tags: ["cls", "v1"]
+  best_metric: "val/accuracy"
+  best_mode: "max"
+  step_metrics:
+    - "train/loss_focal"
+    - "train/learning_rate"
+  epoch_metrics:
+    - "val/accuracy"
+    - "val/false_positive_rate"
+    - "val/false_negative_rate"
+    - "val/loss_focal"
+  visualizations: []
+
+health:
+  loss_nan:
+    action: "stop"
+  loss_diverging:
+    action: "stop"
+    consecutive_steps: 10
+  grad_norm_spike:
+    action: "warn"
+    threshold: 1000
+  val_loss_gap:
+    action: "warn"
+    min_epoch: 5
+    ratio: 10

@@ -322,6 +322,52 @@ pretrained weight는 좋은 초기값을 주고, checkpoint는 학습 중단 후
 - DataLoader 초안, trainer 초안, 스크립트 초안
 - checkpoint, log, weights, LMDB 변환 구조
 
+### OCR-T03 학습 스케줄 및 하이퍼파라미터
+
+`stage4_training/hyperparameters.py`, `train/configs/*_hyperparams_final.yaml`, `train/configs/hyperparam_search.yaml`, `experiments/` 디렉토리는 아래 기능을 제공합니다.
+
+- Classifier / Detection / Recognition별 고정 하이퍼파라미터와 탐색 대상 분리
+- RTX 2080 Ti 11GB 기준 첫 실행 추천값 기록
+- Early stopping 기준과 재현성 seed 기준 정의
+- 실험 결과 CSV 템플릿 생성
+- 최종 확정 전 상태를 `provisional`로 관리
+
+### OCR-T04 학습 모니터링 및 로깅
+
+`stage4_training/monitoring.py`, `train/configs/monitoring_config.yaml`, `train/utils/*monitor*`, `train/utils/checkpoint.py`는 아래 기능을 제공합니다.
+
+- wandb 프로젝트명 `shiftflow-ocr`와 모델별 로깅 항목 정의
+- 로컬 `train_log.csv`, `val_log.csv`, `summary.txt` 생성 구조
+- NaN loss, loss 발산, grad norm 폭증, val/train loss gap 감지
+- `latest.pdparams`, `best.pdparams`, 최근 epoch checkpoint 3개 유지
+- Slack webhook 기반 학습 완료 알림 메시지 생성
+- Detection/Recognition 시각화 결과 저장을 위한 유틸리티
+
+### OCR-E01 Detection 평가
+
+`stage5_evaluation/detection_metrics.py`, `train/evaluators/det_evaluator.py`, `train/scripts/eval_det.py`는 아래 기능을 제공합니다.
+
+- IoU 계산과 greedy 1:1 매칭
+- difficult 박스 제외 규칙 반영
+- Precision / Recall / F1 / TP / FP / FN 계산
+- 이미지별 성능, 포맷별 성능, 업종별 성능 분석
+- FP/FN 오류 유형 분석과 `error_analysis.md` 생성
+- `summary.json`의 `target_met` 필드 생성
+- TP/FP/FN 색상 구분 시각화 저장
+
+### OCR-E02 Recognition 평가
+
+`stage5_evaluation/recognition_metrics.py`, `train/evaluators/rec_evaluator.py`, `train/scripts/eval_rec.py`는 아래 기능을 제공합니다.
+
+- 한글 문자 단위 Levenshtein 편집 거리 계산
+- CER / WER / Accuracy / Normalized CER 계산
+- `single_char`, `date`, `handwrite`, `normal` 타입별 성능 분석
+- `###` 판독 불가 라벨 평가 제외
+- 글자 혼동 쌍 `confusion_pairs.csv` 생성
+- 길이별 오류율과 high-CER 샘플 분석
+- 근무 코드 정확도와 날짜 완전 일치율 계산
+- `summary.json`의 `all_targets_met` 필드 생성
+
 ## 학습 환경 기본값 메모
 
 현재 사용자가 제공한 GPU 정보 기준으로 기본 학습값은 아래 방향으로 맞춰져 있습니다.
@@ -332,6 +378,239 @@ pretrained weight는 좋은 초기값을 주고, checkpoint는 학습 중단 후
 - Classifier batch size: `128`
 - Detection batch size: `12`
 - Recognition batch size: `64`
+- Classifier first-run learning rate: `0.001`
+- Detection first-run learning rate: `0.001`
+- Recognition first-run learning rate: `0.001`
+- Early stopping: `Classifier patience 10`, `Detection patience 20`, `Recognition patience 15`
+
+### OCR-E03 End-to-End 근무표 평가
+
+`stage5_evaluation/e2e_metrics.py`, `train/evaluators/e2e_evaluator.py`, `train/scripts/eval_e2e.py`, `data/e2e_gt/`는 근무표 이미지 한 장을 최종 근무자 x 날짜 스케줄 매트릭스로 복원했을 때의 정확도를 평가합니다.
+
+- `data/e2e_gt/*.json` 형식의 정답 매트릭스를 읽습니다.
+- OCR 결과의 텍스트와 bbox를 y/x 좌표 기준으로 행과 열 클러스터링합니다.
+- 날짜 헤더와 이름 열을 추정해 예측 스케줄 매트릭스를 생성합니다.
+- Cell Accuracy, Worker Schedule Accuracy, Name Accuracy, Code Distribution Error를 계산합니다.
+- 오류를 `det_miss`, `rec_error`, `parse_error`로 분류해 개선 대상을 추적합니다.
+- `summary.json`, `per_image.csv`, `error_attribution.csv`, `format_breakdown.csv`, `industry_breakdown.csv`, `e2e_report.md`를 생성합니다.
+
+실행 예시:
+
+```bash
+python train/scripts/eval_e2e.py \
+  --gt_dir data/e2e_gt \
+  --image_dir data/dataset/test/images \
+  --ocr_results train/eval_results/e2e/ocr_results.json \
+  --output_dir train/eval_results/e2e
+```
+
+### OCR-E04 품질 게이트
+
+`stage5_evaluation/quality_gate.py`, `train/evaluators/quality_gate.py`, `train/scripts/quality_gate.py`는 E01~E03 평가 결과와 서비스 성능 지표를 종합해 모델 변환/서비스 통합 단계로 넘어갈 수 있는지 판정합니다.
+
+- Gate 1: Detection, Recognition, Angle Classifier 개별 모델 기준을 확인합니다.
+- Gate 2: E2E Cell Accuracy, Worker Schedule Accuracy, Name Accuracy, Code Distribution Error, 파싱 성공률을 확인합니다.
+- Gate 3: CPU 추론 속도, 메모리, 안정성, 신뢰도 점수 유효성을 확인합니다.
+- 최종 상태는 `PASS`, `FAIL`, `CONDITIONAL_PASS` 중 하나로 기록됩니다.
+- `quality_report.md`, `deploy_manifest.json`, `gate_summary.json`을 생성합니다.
+
+실행 예시:
+
+```bash
+python train/scripts/quality_gate.py \
+  --det_result train/eval_results/det/summary.json \
+  --rec_result train/eval_results/rec/summary.json \
+  --cls_result train/checkpoints/cls/eval_summary.json \
+  --e2e_result train/eval_results/e2e/summary.json \
+  --service_result train/eval_results/service/summary.json \
+  --output_dir train/quality_gate \
+  --generate_report
+```
+
+### OCR-S01 Inference 모델 변환
+
+`stage6_deployment/export_model.py`, `train/scripts/det_export.py`, `train/scripts/rec_export.py`, `train/scripts/cls_export.py`, `train/scripts/export_all.py`는 학습 완료 체크포인트를 Paddle Inference 배포 구조로 내보내기 위한 공통 인터페이스입니다.
+
+- Detection 입력 스펙: `[None, 3, None, None]`
+- Recognition 입력 스펙: `[None, 3, 32, None]`
+- Angle Classifier 입력 스펙: `[None, 3, 48, 192]`
+- Recognition export 시 `dict_latest.txt`를 inference 폴더의 `dict.txt`로 함께 복사합니다.
+- 각 모델 폴더에 `model_info.json`을 생성해 source checkpoint, config, input spec, 성능 메타를 기록합니다.
+- `build_predictor_config()`와 `build_predictor()`로 OCR-S02에서 사용할 Paddle Predictor 인터페이스를 제공합니다.
+- 로컬 구조 검증용으로 `--dry_run`을 지원합니다. 실제 export는 Paddle 런타임과 실제 모델 builder가 있는 학습 서버에서 수행합니다.
+
+실행 예시:
+
+```bash
+python train/scripts/det_export.py \
+  --config train/configs/det_config.yaml \
+  --checkpoint train/checkpoints/det/best.pdparams \
+  --output_dir backend/ocr/inference/det
+
+python train/scripts/rec_export.py \
+  --config train/configs/rec_config.yaml \
+  --checkpoint train/checkpoints/rec/best.pdparams \
+  --dict_path backend/ocr/dict/dict_latest.txt \
+  --output_dir backend/ocr/inference/rec
+
+python train/scripts/cls_export.py \
+  --config train/configs/cls_config.yaml \
+  --checkpoint train/checkpoints/cls/best.pdparams \
+  --output_dir backend/ocr/inference/cls
+```
+
+### OCR-S03 신뢰도 UI 및 피드백 루프
+
+`stage6_deployment/confidence_ui.py`, `stage6_deployment/api_integration.py`, `train/scripts/build_feedback_dataset.py`는 OCR 결과의 신뢰도 표시와 사용자 수정 피드백 수집을 담당합니다.
+
+- `/ocr` 응답 결과에 `confidence_level`, `cell_id`, `summary`를 추가합니다.
+- 신뢰도 경계값은 `OCR_CONFIDENCE_HIGH`, `OCR_CONFIDENCE_LOW` 환경변수로 조정합니다.
+- `confidence_level`은 `high`, `mid`, `low` 중 하나이며 UI 색상 구분에 사용합니다.
+- `POST /ocr/feedback` 형태의 피드백 저장 helper를 제공합니다.
+- 피드백은 `data/feedback/feedback_log.jsonl`에 JSONL로 기록하고 crop은 `data/feedback/crops/`에 저장합니다.
+- `GET /admin/ocr/feedback-stats` 형태의 통계 helper를 제공합니다.
+- `build_feedback_dataset.py`로 피드백을 Recognition 재학습용 `rec_gt.txt`와 crop 폴더로 변환합니다.
+
+실행 예시:
+
+```bash
+python train/scripts/build_feedback_dataset.py \
+  --feedback_log data/feedback/feedback_log.jsonl \
+  --crops_dir data/feedback/crops \
+  --output_dir data/feedback_dataset \
+  --min_feedback_count 50
+```
+
+### OCR-S04 모델 버전 관리 및 롤백
+
+`stage6_deployment/versioning.py`, `train/scripts/register_model_version.py`, `train/scripts/deploy_model.py`, `train/scripts/rollback_model.py`는 OCR 모델 버전 등록, 배포, 롤백, 배포 이력 조회를 담당합니다.
+
+- `backend/ocr/model_registry/`에 버전별 모델/설정/version.json을 보관합니다.
+- `backend/ocr/inference/`는 현재 서비스 중인 모델 경로로 유지합니다.
+- `backend/ocr/active_version.txt`와 `registry_index.json`으로 현재 버전과 전체 상태를 추적합니다.
+- `deployment_log.jsonl`에 deploy/rollback 이벤트를 JSONL로 기록합니다.
+- `/ocr/version`, `/admin/ocr/deployment-history`, `/health` helper를 제공합니다.
+- 에러율, 연속 예외, 메모리, health check 기준으로 즉시 롤백 트리거를 계산합니다.
+
+실행 예시:
+
+```bash
+python train/scripts/register_model_version.py \
+  --version v1.0.0 \
+  --source_inference_dir backend/ocr/inference \
+  --config_dir train/configs
+
+python train/scripts/deploy_model.py \
+  --version v1.0.0
+
+python train/scripts/rollback_model.py \
+  --target_version v1.0.0 \
+  --reason "배포 후 에러율 초과"
+```
+
+### OCR-S02 서비스 통합
+
+`stage6_deployment/ocr_service_v2.py`와 `stage6_deployment/api_integration.py`는 변환된 inference 모델을 서비스 응답 계약에 연결하기 위한 v2 OCR 서비스입니다.
+
+- `OCRService.predict()`는 기존 `/ocr` 응답 계약인 `results`, `processing_time`을 유지합니다.
+- 내부 파이프라인은 Angle Classifier -> Detection -> Recognition 순서로 구성됩니다.
+- 모델은 싱글톤 패턴으로 1회만 로드하도록 `get_ocr_service()`를 제공합니다.
+- `ENABLE_OCR=false`일 때 빈 OCR 결과를 반환해 웹 기능 테스트를 유지합니다.
+- Detection 입력의 resize/padding 좌표계를 원본 이미지 좌표로 되돌리는 `_restore_boxes()`를 포함합니다.
+- `/ocr`, `/roster/parse` 테스트용 FastAPI app factory와 응답 정규화 함수를 제공합니다.
+- 변경 이력은 `CHANGELOG.md`에 기록합니다.
 
 이 값들은 안정적으로 첫 학습을 시작하기 위한 보수적 기준입니다.  
 실제 학습에서 여유 VRAM이 확인되면 Detection 배치 크기부터 점진적으로 늘리는 방식이 안전합니다.
+## 1000만 장 데이터셋 기준 전체 동작 흐름
+
+이 섹션은 약 10,000,000장의 근무표 이미지가 준비되어 있다고 가정했을 때, ShiftFlow OCR 파이프라인이 어떤 순서로 동작하는지 운영 관점에서 정리한 내용입니다. 소규모 샘플 실험과 달리 이 규모에서는 “한 번에 전부 메모리에 올려 처리”하지 않고, 메타데이터 기반 샤딩, 배치 처리, 체크포인트, 품질 게이트를 기준으로 단계별로 흘려보냅니다.
+
+### 전체 파이프라인 그림
+
+```mermaid
+flowchart TD
+    A["원본 데이터 1000만 장"] --> B["Stage 1 데이터 수집/마스킹/검수"]
+    B --> C["중복 제거, 품질 탈락, 개인정보 마스킹"]
+    C --> D["어노테이션 및 합성 데이터 보강"]
+    D --> E["Train/Val/Test 분할 및 데이터 동결"]
+    E --> F["Stage 2 전처리"]
+    F --> G["온라인 증강"]
+    G --> H["Stage 3 모델 입력 생성"]
+    H --> I["Angle Classifier 학습"]
+    H --> J["Detection DBNet++ 학습"]
+    H --> K["Recognition SVTR/CRNN 학습"]
+    I --> L["Stage 5 개별 평가"]
+    J --> L
+    K --> L
+    L --> M["E2E 근무표 평가"]
+    M --> N{"품질 게이트 통과?"}
+    N -- "FAIL" --> O["데이터 보강/파라미터 재탐색/재학습"]
+    O --> H
+    N -- "PASS" --> P["Inference 모델 변환"]
+    P --> Q["서비스 통합 및 버전 등록"]
+    Q --> R["운영 배포"]
+    R --> S["신뢰도 UI 및 사용자 피드백"]
+    S --> T["피드백 데이터셋 구축"]
+    T --> O
+```
+
+### 규모별 처리 원칙
+
+| 항목 | 1000만 장 기준 동작 |
+|---|---|
+| 원본 저장 | `data/raw/`에 포맷별로 저장하되, 실제 운영에서는 월/업종/포맷 단위 샤딩을 권장합니다. |
+| 메타데이터 | 모든 이미지는 `collection_log.csv`, `quality_check.csv`, 이후 `dataset_stats.json`으로 추적합니다. |
+| 중복 제거 | 파일 해시(MD5/SHA256) 기준으로 먼저 제거합니다. 1000만 장에서는 중복 제거만으로도 학습 비용이 크게 줄어듭니다. |
+| 품질 검수 | 해상도, 파일 손상, 라벨 누락, bbox 유효성은 자동 검수로 처리하고, 수동 검수는 샘플링 기반으로 진행합니다. |
+| 어노테이션 | 전체 수동 라벨링은 비용이 크므로 실제 데이터 일부와 고위험 포맷을 우선 라벨링하고, 합성/증강 데이터로 보강합니다. |
+| 학습 입력 | 이미지 파일 직접 로딩보다 LMDB 또는 샤딩된 인덱스 기반 DataLoader를 권장합니다. |
+| 학습 | 세 모델을 동시에 학습하지 않고 Angle Classifier -> Detection -> Recognition 순서로 진행합니다. |
+| 평가 | Val/Test는 실제 이미지 위주로 유지하고, 합성 데이터는 Train 중심으로 사용합니다. |
+| 배포 | 품질 게이트 통과 후 `backend/ocr/model_registry/vX.Y.Z/`에 등록하고 `inference/`를 교체합니다. |
+| 운영 개선 | 낮은 신뢰도 셀과 사용자 수정 데이터를 `data/feedback/`에 쌓아 다음 재학습에 사용합니다. |
+
+### 데이터 흐름 상세
+
+| 단계 | 입력 | 처리 | 출력 |
+|---|---|---|---|
+| D01 수집 기준 | 원본 이미지 | 포맷/업종/품질/개인정보 기준 적용 | `data/raw/`, `data/masked/`, `data/meta/collection_log.csv` |
+| D02 합성 데이터 | 부족 포맷/업종 통계 | 렌더링 데이터와 실제 이미지 증강 생성 | `data/synthetic/`, `data/meta/synth_log.csv` |
+| D03 어노테이션 | 마스킹 완료 이미지 | bbox 및 텍스트 라벨 생성 | `data/labels/det_gt.txt`, `data/labels/rec_gt.txt`, `data/labels/crop/` |
+| D04 분할/검수 | 실제+합성+라벨 | 자동 검수, 통계 집계, 계층 분할 | `data/dataset/train|val|test/` |
+| P01 전처리 | 학습/추론 이미지 | 로드, 방향 보정, 노이즈 제거, deskew, resize | 모델 입력용 numpy/tensor |
+| P02 온라인 증강 | 전처리 이미지 | 학습 중 실시간 기하/광학 변환 | 증강된 batch |
+| P03 문자 사전 | `rec_gt.txt`, 도메인 코드 | 한글/영문/숫자/기호 사전 생성 | `backend/ocr/dict/dict_latest.txt` |
+| M/T 학습 | dataset + config | Cls/Det/Rec 모델 학습 | `train/checkpoints/*/best.pdparams` |
+| E 평가 | checkpoint + test set | 개별/E2E/품질 게이트 평가 | `train/eval_results/`, `train/quality_gate/` |
+| S 배포 | gate 통과 모델 | inference export, 서비스 연결, 버전 등록 | `backend/ocr/inference/`, `model_registry/` |
+
+### 1000만 장 처리 시 권장 배치 운영
+
+| 작업 | 권장 단위 | 이유 |
+|---|---|---|
+| 품질 검수 | 10만 장 단위 shard | 실패 원인 추적과 재처리가 쉽습니다. |
+| 해시 중복 제거 | 전체 인덱스 기준 1회 + shard별 증분 | 같은 근무표가 여러 경로로 들어오는 경우를 줄입니다. |
+| 전처리 캐시 | Train shard 단위 | 반복 학습 시 CPU 전처리 병목을 줄입니다. |
+| Detection 학습 | GPU 메모리 기준 batch 8~32 | 근무표 전체 이미지는 커서 VRAM을 많이 씁니다. |
+| Recognition 학습 | batch 128~256부터 탐색 | crop 이미지는 작아서 큰 배치가 유리합니다. |
+| 평가 | Val/Test 고정, 운영 중 변경 금지 | 품질 비교의 기준선을 유지합니다. |
+| 모델 버전 | 성능 통과 모델만 registry 등록 | 실패 모델이 운영 경로에 섞이는 것을 막습니다. |
+
+### 운영 중 반복 사이클
+
+```mermaid
+flowchart LR
+    A["서비스 OCR 결과"] --> B["신뢰도 점수 계산"]
+    B --> C["낮은 신뢰도 셀 UI 강조"]
+    C --> D["사용자 수정"]
+    D --> E["feedback_log.jsonl 저장"]
+    E --> F["피드백 데이터셋 변환"]
+    F --> G["Recognition fine-tuning"]
+    G --> H["E01~E04 재평가"]
+    H --> I{"품질 게이트 통과"}
+    I -- "통과" --> J["새 버전 등록 및 배포"]
+    I -- "실패" --> K["기존 운영 버전 유지"]
+```
+
+1000만 장 규모에서 가장 중요한 원칙은 “데이터를 많이 넣는 것”보다 “어떤 데이터가 어떤 품질과 라벨로 들어갔는지 추적 가능한 상태를 유지하는 것”입니다. 그래서 이 프로젝트는 모든 단계에서 로그, 통계, config, checkpoint, version 정보를 남기도록 구성되어 있습니다.

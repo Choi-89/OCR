@@ -13,8 +13,9 @@ def main() -> None:
     parser.add_argument("--dict_path", required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--resume")
+    parser.add_argument("--experiment_name", default="rec_debug")
     args = parser.parse_args()
-    trainer = RecTrainer(args.config, args.data_dir, args.dict_path)
+    trainer = RecTrainer(args.config, args.data_dir, args.dict_path, args.experiment_name)
     pprint(
         {
             "config": args.config,
@@ -22,6 +23,7 @@ def main() -> None:
             "dict_path": args.dict_path,
             "output_dir": args.output_dir,
             "resume": args.resume,
+            "experiment_name": args.experiment_name,
             "debug_batch": trainer.build_debug_batch(),
         }
     )
